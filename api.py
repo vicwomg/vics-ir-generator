@@ -104,7 +104,9 @@ async def generate_ir(
 ):
     # Enforce Origin restriction for non-CORS direct API calls (e.g. cURL)
     origin = request.headers.get("origin") or request.headers.get("referer")
-    host = request.headers.get("host")
+    
+    # Get the host, prioritizing X-Forwarded-Host if behind a proxy
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
     
     # If there is an origin/referer, and it's not in our allowed list AND it's not same-origin, block it
     if origin:
@@ -119,8 +121,8 @@ async def generate_ir(
         
         if not is_allowed_origin and not is_same_origin:
             raise HTTPException(status_code=403, detail="Access denied. Action must be initiated from the official frontend.")
-    elif request.client.host not in ["127.0.0.1", "localhost"]:
-        # If no origin, block curl/postman unless it's originating from localhost testing
+    elif host and host.split(':')[0] not in ["127.0.0.1", "localhost"]:
+        # If no origin, block curl/postman unless the host is strictly localhost testing
         raise HTTPException(status_code=403, detail="API access must originate from a browser.")
         
     # Create a temporary directory for this request
