@@ -49,6 +49,8 @@ For ease of use, this project includes a complete, containerized web interface. 
 
 The Web API is built on **FastAPI** and containerized into a minimal, extremely lightweight Debian image.
 
+There is a free-tier hosted version at: https://vics-ir-generator.onrender.com/ (it will probably take a long time to load and no guarantees on uptime or performance)
+
 ### Running via Docker
 
 Build the Docker image:
