@@ -41,7 +41,7 @@ Example:
 uv run vics-ir-generator ./takes/guitar_direct.wav ./takes/guitar_mic.wav --output my_custom_ir.wav --plot
 ```
 
-## Docker Web Interface
+## Web Interface
 
 <a href="https://ibb.co/LXJkzBDT"><img src="https://i.ibb.co/ks9HgzVL/vicsirgenerator.jpg" alt="vicsirgenerator" border="0"></a>
 
