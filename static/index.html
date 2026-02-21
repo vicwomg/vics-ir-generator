@@ -690,6 +690,51 @@
       };
 
       function handleFileSet(file, zone, nameSpan, fileVarName) {
+        if (
+          !file.name.toLowerCase().endsWith(".wav") &&
+          file.type !== "audio/wav" &&
+          file.type !== "audio/x-wav"
+        ) {
+          errorMsg.innerText = `File "${file.name}" is not a valid WAV file. Please upload a .wav file.`;
+          errorMsg.style.display = "block";
+
+          if (fileVarName === "piezo") {
+            piezoFile = null;
+            piezoInput.value = "";
+          }
+          if (fileVarName === "mic") {
+            micFile = null;
+            micInput.value = "";
+          }
+
+          nameSpan.innerText = "";
+          zone.classList.remove("has-file");
+          checkReady();
+          return;
+        }
+
+        const maxSize = 15 * 1024 * 1024; // 15MB
+        if (file.size > maxSize) {
+          errorMsg.innerText = `File "${file.name}" is too large. Please limit uploads to 15MB.`;
+          errorMsg.style.display = "block";
+
+          if (fileVarName === "piezo") {
+            piezoFile = null;
+            piezoInput.value = "";
+          }
+          if (fileVarName === "mic") {
+            micFile = null;
+            micInput.value = "";
+          }
+
+          nameSpan.innerText = "";
+          zone.classList.remove("has-file");
+          checkReady();
+          return;
+        }
+
+        errorMsg.style.display = "none";
+
         if (fileVarName === "piezo") piezoFile = file;
         if (fileVarName === "mic") micFile = file;
 

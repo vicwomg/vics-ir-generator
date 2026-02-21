@@ -99,10 +99,18 @@ async def generate_ir(
     
     try:
         # Save uploads to temp files
-        piezo_path = os.path.join(temp_dir, piezo_file.filename or "piezo.wav")
-        mic_path = os.path.join(temp_dir, mic_file.filename or "mic.wav")
+        piezo_path = os.path.join(temp_dir, "piezo.wav")
+        mic_path = os.path.join(temp_dir, "mic.wav")
         output_path = os.path.join(temp_dir, "output.wav")
         
+        # SECURITY FIX: Enforce 15MB size limit server-side
+        MAX_SIZE = 15 * 1024 * 1024
+        
+        if piezo_file.size and piezo_file.size > MAX_SIZE:
+             raise ValueError("Piezo file exceeds 15MB limit.")
+        if mic_file.size and mic_file.size > MAX_SIZE:
+             raise ValueError("Mic file exceeds 15MB limit.")
+             
         with open(piezo_path, "wb") as f:
             shutil.copyfileobj(piezo_file.file, f)
             
