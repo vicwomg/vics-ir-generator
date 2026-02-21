@@ -43,6 +43,8 @@ uv run vics-ir-generator ./takes/guitar_direct.wav ./takes/guitar_mic.wav --outp
 
 ## Docker Web Interface
 
+<a href="https://ibb.co/LXJkzBDT"><img src="https://i.ibb.co/ks9HgzVL/vicsirgenerator.jpg" alt="vicsirgenerator" border="0"></a>
+
 For ease of use, this project includes a complete, containerized web interface. The frontend features drag-and-drop file uploading, adjustable parameters with visual feedback, real-time Server-Sent Events (SSE) processing updates, and audio previews.
 
 The Web API is built on **FastAPI** and containerized into a minimal, extremely lightweight Debian image.
