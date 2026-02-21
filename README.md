@@ -2,6 +2,15 @@
 
 A robust DSP tool for generating acoustic guitar Impulse Responses (IRs). This tool takes the direct, sterile sound of an acoustic guitar's built-in piezo pickup and compares it to a high-quality studio microphone recording of the same performance. It then calculates and generates a mathematical Impulse Response (an `.wav` file) that can be loaded into IR pedals or plugins (like the HX Stomp, Nux Pulse, Sonicake IR, or TC Electronic Impulse Loader) to make your live piezo tone sound like a mic'd acoustic guitar.
 
+If you find this useful, please consider supporting my work and helping offset my hosting/CPU costs:
+
+<a href="https://www.buymeacoffee.com/vicwomg" target="_blank"
+          ><img
+            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+            alt="Buy Me A Coffee"
+            style="height: 60px !important; width: 217px !important"
+        /></a>
+
 ## How the Algorithm Works
 
 The core algorithm is designed to match the frequency response of your pickup to your microphone, prioritizing musicality over perfect mathematical precision (which often sounds harsh and unnatural).
@@ -10,7 +19,7 @@ The core algorithm is designed to match the frequency response of your pickup to
 2. **Statistical Outlier Rejection**: Acoustic instruments are dynamic. Fret buzz, string squeaks, or phase issues can ruin an IR. The algorithm statistically evaluates every frequency bin across all chunks, rejecting any anomalies that fall outside 2 standard deviations of the median spectrum.
 3. **Fractional Octave Smoothing**: Raw FFT frequency matching creates a hyper-accurate but aggressive "comb filter" effect that sounds robotic. The algorithm heavily smoothes the peaks and valleys across fractional octaves (default: `1/3`) to retain the natural, wooden resonance of the instrument.
 4. **Minimum Phase Conversion & High/Low Pass**: To ensure the IR feels instantaneous to play and doesn't cause latency, the matched frequency response is processed into a Minimum Phase impulse. Extreme sub-bass (< 60Hz) and harsh digital highs (> 18kHz) are rolled off to prevent speaker damage and hiss.
-5. **Graphic EQ Matching**: As a final polish, the generated IR is mathematically convolved against the original piezo signal. A simulated 1/3-octave graphic EQ then fine-tunes the result, ensuring the final output matches the target microphone's energy footprint perfectly.
+5. **Graphic EQ Matching**: As a final polish, the generated IR is mathematically convolved against the original piezo signal. A simulated 1/3-octave graphic EQ then fine-tunes the result, ensuring the final output matches the target microphone's energy footprint.
 
 ## Requirements
 
@@ -65,7 +74,7 @@ Run the container mapping port 8000:
 docker run -p 8000:8000 vics-ir-generator:latest
 ```
 
-Open your browser to [http://127.0.0.1:8000](http://127.0.0.1:8000) to use the UI!
+Open your browser to [http://127.0.0.1:8000](http://127.0.0.1:8000) to use the UI
 
 ### Local Web Development
 
