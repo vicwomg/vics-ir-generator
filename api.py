@@ -5,7 +5,7 @@ import tempfile
 import matplotlib
 matplotlib.use('Agg') # Use non-interactive backend for server
 
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,11 +23,18 @@ from vics_ir_generator import generate_guitar_ir
 
 app = FastAPI(title="Vic's IR Generator")
 
+# List of allowed origins - update this when you deploy!
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Restrict CORS specifically to our allowed origins instead of "*"
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"], # Only allow GET and POST
     allow_headers=["*"],
 )
 
@@ -88,12 +95,34 @@ def run_ir_generation(task_id: str, temp_dir: str, piezo_path: str, mic_path: st
 
 @app.post("/api/generate")
 async def generate_ir(
+    request: Request,
     background_tasks: BackgroundTasks,
     piezo_file: UploadFile = File(...),
     mic_file: UploadFile = File(...),
     ir_length: int = Form(2048),
     smoothing: float = Form(0.333333333)
 ):
+    # Enforce Origin restriction for non-CORS direct API calls (e.g. cURL)
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    host = request.headers.get("host")
+    
+    # If there is an origin/referer, and it's not in our allowed list AND it's not same-origin, block it
+    if origin:
+        # Strip trailing slashes that referer often adds
+        clean_origin = origin.rstrip("/")
+        
+        # Check if it's in the hardcoded list
+        is_allowed_origin = any(clean_origin.startswith(allowed) for allowed in ALLOWED_ORIGINS)
+        
+        # Check if it's same-origin (the origin contains the host domain)
+        is_same_origin = host and host in clean_origin
+        
+        if not is_allowed_origin and not is_same_origin:
+            raise HTTPException(status_code=403, detail="Access denied. Action must be initiated from the official frontend.")
+    elif request.client.host not in ["127.0.0.1", "localhost"]:
+        # If no origin, block curl/postman unless it's originating from localhost testing
+        raise HTTPException(status_code=403, detail="API access must originate from a browser.")
+        
     # Create a temporary directory for this request
     temp_dir = tempfile.mkdtemp()
     
