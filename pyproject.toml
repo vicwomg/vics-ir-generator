@@ -19,3 +19,4 @@ dependencies = [
 
 [project.scripts]
 vics-ir-generator = "vics_ir_generator:main"
+vics-ir-generator-web-dev = "api:start_dev_server"

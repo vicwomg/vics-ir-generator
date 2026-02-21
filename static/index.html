@@ -198,14 +198,36 @@
       }
 
       .loader {
-        display: none;
         width: 48px;
         height: 48px;
         border: 4px solid var(--border-color);
         border-bottom-color: var(--accent-color);
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin: 2rem auto;
+        margin: 0 auto;
+      }
+
+      @keyframes pulseText {
+        0% {
+          opacity: 0.6;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0.6;
+        }
+      }
+
+      .loading-container {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        padding: 2rem 0;
+      }
+
+      .loading-container p {
+        animation: pulseText 1.5s ease-in-out infinite;
       }
 
       @keyframes spin {
@@ -401,8 +423,22 @@
       </div>
 
       <!-- Loading -->
-      <div class="full-width">
+      <div
+        class="full-width loading-container"
+        id="loading-container"
+        style="display: none"
+      >
         <div class="loader" id="loader"></div>
+        <p
+          id="progress-text"
+          style="
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            font-size: 0.9rem;
+          "
+        >
+          Initializing...
+        </p>
       </div>
 
       <!-- Result Panel -->
@@ -548,7 +584,8 @@
       const smoothValue = document.getElementById("smooth-value");
 
       const generateBtn = document.getElementById("generate-btn");
-      const loader = document.getElementById("loader");
+      const loadingContainer = document.getElementById("loading-container");
+      const progressText = document.getElementById("progress-text");
       const resultPanel = document.getElementById("result-panel");
       const resultPlot = document.getElementById("result-plot");
       const resultAudio = document.getElementById("result-audio");
@@ -658,7 +695,10 @@
       generateBtn.addEventListener("click", async () => {
         errorMsg.style.display = "none";
         resultPanel.style.display = "none";
-        loader.style.display = "block";
+        loadingContainer.style.display = "flex";
+        loadingContainer.style.flexDirection = "column";
+        loadingContainer.style.alignItems = "center";
+        progressText.innerText = "Initializing...";
         generateBtn.disabled = true;
 
         const formData = new FormData();
@@ -668,6 +708,7 @@
         formData.append("smoothing", smoothInput.value);
 
         try {
+          // 1. Start the job and get a task ID
           const response = await fetch("/api/generate", {
             method: "POST",
             body: formData,
@@ -679,19 +720,49 @@
             throw new Error(data.error || "Server error occurred");
           }
 
-          // Render Base64 Data
-          resultPlot.src = `data:image/png;base64,${data.img_base64}`;
-          const audioUrl = `data:audio/wav;base64,${data.wav_base64}`;
-          resultAudio.src = audioUrl;
-          downloadLink.href = audioUrl;
-          downloadLink.download = "vics_ir_output.wav";
+          const taskId = data.task_id;
 
-          resultPanel.style.display = "flex";
+          // 2. Connect to the SSE stream to listen for progress
+          const eventSource = new EventSource(`/api/status/${taskId}`);
+
+          eventSource.onmessage = (event) => {
+            const taskState = JSON.parse(event.data);
+
+            if (taskState.status === "failed") {
+              errorMsg.innerText = taskState.error || "Generation failed.";
+              errorMsg.style.display = "block";
+              loadingContainer.style.display = "none";
+              generateBtn.disabled = false;
+              eventSource.close();
+            } else if (taskState.status === "completed") {
+              // Render Base64 Data
+              resultPlot.src = `data:image/png;base64,${taskState.result.img_base64}`;
+              const audioUrl = `data:audio/wav;base64,${taskState.result.wav_base64}`;
+              resultAudio.src = audioUrl;
+              downloadLink.href = audioUrl;
+              downloadLink.download = "vics_ir_output.wav";
+
+              resultPanel.style.display = "flex";
+              loadingContainer.style.display = "none";
+              generateBtn.disabled = false;
+              eventSource.close();
+            } else {
+              // Only update the message text if we are still running
+              progressText.innerText = taskState.message || "Generating...";
+            }
+          };
+
+          eventSource.onerror = (err) => {
+            errorMsg.innerText = "Lost connection to server progress stream.";
+            errorMsg.style.display = "block";
+            loadingContainer.style.display = "none";
+            generateBtn.disabled = false;
+            eventSource.close();
+          };
         } catch (err) {
           errorMsg.innerText = err.message;
           errorMsg.style.display = "block";
-        } finally {
-          loader.style.display = "none";
+          loadingContainer.style.display = "none";
           generateBtn.disabled = false;
         }
       });

@@ -78,8 +78,19 @@ def to_minimum_phase(ir):
     min_phase_spectrum = np.exp(np.fft.fft(min_phase_cepstrum))
     return np.fft.ifft(min_phase_spectrum).real
 
-def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smoothing=1/3, plot=False):
-    # 1. Load and Pre-process
+def generate_guitar_ir(piezo_path, mic_path, output_path="./output.wav", ir_length=2048, smoothing=1/3, plot=False, progress_callback=None):
+    """
+    Generates an impulse response that transforms a piezo signal to match a mic signal.
+    """
+    
+    # Helper to send progress
+    def report_progress(msg, pct=None):
+        if progress_callback:
+            progress_callback(msg, pct)
+
+    report_progress("Loading audio files...", 5)
+    
+    # 1. Load and Pre-Process
     p_data, fs = sf.read(piezo_path)
     m_data, _ = sf.read(mic_path)
     if len(p_data.shape) > 1: p_data = p_data[:, 0]
@@ -90,14 +101,15 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
     Nbuff = fs # 1-second chunks
     Nb = min(len(p_data), len(m_data))
     
-    # Calculate how many 1-second chunks we can process (leaving a small 10-sample margin like cuki)
-    import math
-    Nbmax = math.floor(Nb / Nbuff) - 10
+    # Calculate how many full 1-second chunks we can extract
+    Nbmax = int(np.floor(Nb / Nbuff)) - 1
     
     if Nbmax <= 0:
-        raise ValueError("Audio files are too short. Need at least 2 seconds of audio.")
+        raise ValueError("Audio files are too short. At least 2 seconds required for chunk processing.")
         
-    print(f"Processing {Nbmax} chunks for robust IR generation...")
+    msg = f"Processing {Nbmax} chunks for robust IR generation..."
+    print(msg)
+    report_progress(msg, 10)
     
     # Store the FFT transfers for each chunk
     alice = np.zeros((NbF, Nbmax), dtype=complex)
@@ -120,6 +132,10 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
             FIR = np.ones(NbF, dtype=complex)
             
         alice[:, n] = FIR
+        
+        # Report progress every chunk
+        if n % 5 == 0 or n == Nbmax - 1:
+            report_progress(f"Extracting FFT from chunk {n+1}/{Nbmax}...", 10 + int((n/Nbmax)*20))
 
     # 3. Statistical outlier rejection and averaging
     ALICE = np.zeros(NbF, dtype=complex)
@@ -139,6 +155,9 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
             ALICE[i] = 1.0 # neutral fallback
         else:
             ALICE[i] = np.mean(A)
+            
+        if i % 500 == 0 or i == NbF - 1:
+            report_progress(f"Statistically averaging frequencies {i}/{NbF}...", 30 + int((i/NbF)*20))
 
     # 3.5 Apply Fractional Octave Smoothing
     if smoothing > 0:
@@ -164,7 +183,10 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
     ir_final = ir_final / np.max(np.abs(ir_final)) * 0.95
 
     # 7. Graphic EQ Matching (The Cuki "M" Process)
-    print("Applying Graphic EQ matching...")
+    msg = f"Applying Graphic EQ matching... (Smoothing: {smoothing} octaves)"
+    print(msg)
+    report_progress(msg, 60)
+    
     # Reference sample test at 10s and 20s (using middle of the file)
     test_start = min(10 * fs, len(m_data) // 3)
     test_end = min(20 * fs, len(m_data) // 3 * 2)
@@ -173,7 +195,7 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
     PS = signal.convolve(p_data[test_start:test_end], ir_final, mode='same')
     
     # Calculate 1/3 octave spectra
-    p_mic, _, f1, f2 = oct_spectrum2(MS / (np.max(np.abs(MS)) + 1e-12), fs)
+    p_mic, freqs, f1, f2 = oct_spectrum2(MS / (np.max(np.abs(MS)) + 1e-12), fs)
     p_piezo, _, _, _ = oct_spectrum2(PS / (np.max(np.abs(PS)) + 1e-12), fs)
     
     # Difference in dB between target mic and current piezo+IR result
@@ -185,6 +207,7 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
     IRX[0] = 1.0 # identity impulse
     
     for i in range(0, len(f1)): # Browse each frequency of the octave spectrum
+        report_progress(f"Matching Graphic EQ Band {i+1}/{len(f1)}...", 60 + int((i/len(f1))*30))
         g_db = g0[i]
         
         # Limit extreme EQ corrections to prevent runaway feedback/ringing
@@ -206,7 +229,9 @@ def generate_guitar_ir(piezo_path, mic_path, output_path, ir_length=2048, smooth
     print(f"Musical IR generated: {output_path} (Smoothing: {smoothing} octaves)")
 
     if plot:
-        print("Applying IR and generating plot...")
+        msg = "Applying IR and generating plot..."
+        print(msg)
+        report_progress(msg, 95)
         # Apply IR to piezo signal
         transformed_piezo = signal.convolve(p_data, ir_final, mode='full')
         
