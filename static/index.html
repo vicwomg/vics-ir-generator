@@ -707,9 +707,13 @@
         formData.append("ir_length", lenInput.value);
         formData.append("smoothing", smoothInput.value);
 
+        const basePath = window.location.pathname.endsWith("/")
+          ? window.location.pathname
+          : window.location.pathname + "/";
+
         try {
           // 1. Start the job and get a task ID
-          const response = await fetch("api/generate", {
+          const response = await fetch(`${basePath}api/generate`, {
             method: "POST",
             body: formData,
           });
@@ -723,7 +727,9 @@
           const taskId = data.task_id;
 
           // 2. Connect to the SSE stream to listen for progress
-          const eventSource = new EventSource(`api/status/${taskId}`);
+          const eventSource = new EventSource(
+            `${basePath}api/status/${taskId}`,
+          );
 
           eventSource.onmessage = (event) => {
             const taskState = JSON.parse(event.data);
