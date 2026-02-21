@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vic's Acoustic IR Generator</title>
+    <style>
+      :root {
+        --bg-color: #0d1117;
+        --panel-bg: rgba(22, 27, 34, 0.7);
+        --border-color: #30363d;
+        --accent-color: #58a6ff;
+        --accent-hover: #79c0ff;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --danger-color: #f85149;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        margin: 0;
+        padding: 2rem;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      h1 {
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        margin-bottom: 2rem;
+        background: linear-gradient(90deg, #fff, #58a6ff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 900px;
+        display: grid;
+        gap: 2rem;
+        grid-template-columns: 1fr;
+      }
+
+      @media (min-width: 768px) {
+        .container {
+          grid-template-columns: 1fr 1fr;
+        }
+        .full-width {
+          grid-column: 1 / -1;
+        }
+      }
+
+      .panel {
+        background: var(--panel-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+
+      .drop-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        padding: 2rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .drop-zone:hover,
+      .drop-zone.dragover {
+        border-color: var(--accent-color);
+        background: rgba(88, 166, 255, 0.05);
+      }
+
+      .drop-zone.has-file {
+        border-style: solid;
+        border-color: var(--accent-color);
+      }
+
+      .drop-zone p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+      }
+
+      .drop-zone input[type="file"] {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .file-name {
+        display: block;
+        margin-top: 0.5rem;
+        font-weight: 500;
+        color: var(--accent-color);
+        word-break: break-all;
+      }
+
+      .control-group {
+        margin-bottom: 1.5rem;
+      }
+
+      .control-group label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        font-size: 0.95rem;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent-color);
+      }
+
+      button {
+        background-color: var(--accent-color);
+        color: #0d1117;
+        border: none;
+        padding: 1rem 2rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        width: 100%;
+        transition:
+          background-color 0.2s ease,
+          transform 0.1s ease;
+        box-shadow: 0 0 15px rgba(88, 166, 255, 0.3);
+      }
+
+      button:hover:not(:disabled) {
+        background-color: var(--accent-hover);
+        transform: translateY(-1px);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+
+      button:disabled {
+        background-color: var(--border-color);
+        color: var(--text-secondary);
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .result-panel {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+        animation: fadeIn 0.5s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .result-image {
+        width: 100%;
+        max-width: 800px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: #fff; /* matplotlib background usually white */
+      }
+
+      audio {
+        width: 100%;
+        height: 40px;
+        border-radius: 8px;
+      }
+
+      .loader {
+        display: none;
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--border-color);
+        border-bottom-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 2rem auto;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .error-message {
+        color: var(--danger-color);
+        background: rgba(248, 81, 73, 0.1);
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid var(--danger-color);
+        display: none;
+        margin-bottom: 1rem;
+      }
+
+      .help-btn {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8px;
+        transition: all 0.2s ease;
+        padding: 0;
+        box-shadow: none;
+      }
+
+      .help-btn:hover {
+        color: var(--text-primary);
+        border-color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.1);
+        transform: none;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .modal-overlay.show {
+        display: flex;
+        opacity: 1;
+      }
+
+      .modal-content {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        position: relative;
+        transform: translateY(20px);
+        transition: transform 0.2s ease;
+      }
+
+      .modal-overlay.show .modal-content {
+        transform: translateY(0);
+      }
+
+      .modal-close {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0;
+        box-shadow: none;
+        width: auto;
+      }
+
+      .modal-close:hover {
+        color: var(--text-primary);
+        background: none;
+        transform: none;
+      }
+
+      .modal-text {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        margin-top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Vic's Acoustic IR Generator</h1>
+
+    <div class="container">
+      <!-- Input Panel -->
+      <div class="panel">
+        <h3 style="margin-top: 0; display: flex; align-items: center">
+          Source Audio
+          <button
+            type="button"
+            class="help-btn"
+            onclick="openModal('source-modal')"
+            aria-label="Help"
+          >
+            ?
+          </button>
+        </h3>
+
+        <div class="drop-zone" id="piezo-zone">
+          <p>Drop Pickup WAV here or click to browse</p>
+          <span class="file-name" id="piezo-name"></span>
+          <input type="file" id="piezo-file" accept="audio/wav,audio/x-wav" />
+        </div>
+
+        <div class="drop-zone" id="mic-zone" style="margin-top: 1rem">
+          <p>Drop Mic WAV here or click to browse</p>
+          <span class="file-name" id="mic-name"></span>
+          <input type="file" id="mic-file" accept="audio/wav,audio/x-wav" />
+        </div>
+      </div>
+
+      <!-- Settings Panel -->
+      <div class="panel">
+        <h3 style="margin-top: 0; display: flex; align-items: center">
+          Configuration
+          <button
+            type="button"
+            class="help-btn"
+            onclick="openModal('config-modal')"
+            aria-label="Help"
+          >
+            ?
+          </button>
+        </h3>
+
+        <div class="control-group">
+          <label>
+            <span>IR Length (Samples)</span>
+            <span id="len-value">2048</span>
+          </label>
+          <!-- common 2^n steps: 512, 1024, 2048, 4096 -->
+          <input
+            type="range"
+            id="ir-length"
+            min="512"
+            max="4096"
+            step="512"
+            value="2048"
+          />
+        </div>
+
+        <div class="control-group">
+          <label>
+            <span>Smoothing (Fractional Octave)</span>
+            <span id="smooth-value">1/3</span>
+          </label>
+          <input
+            type="range"
+            id="smoothing"
+            min="0"
+            max="1"
+            step="0.16666666"
+            value="0.33333333"
+          />
+        </div>
+
+        <div class="error-message" id="error-msg"></div>
+
+        <button id="generate-btn" disabled>Generate Impulse Response</button>
+      </div>
+
+      <!-- Loading -->
+      <div class="full-width">
+        <div class="loader" id="loader"></div>
+      </div>
+
+      <!-- Result Panel -->
+      <div class="panel full-width result-panel" id="result-panel">
+        <h2 style="margin: 0">Generation Complete</h2>
+
+        <img
+          class="result-image"
+          id="result-plot"
+          alt="Frequency Response Plot"
+        />
+
+        <div style="width: 100%; max-width: 400px; text-align: center">
+          <p
+            style="
+              margin-bottom: 0.5rem;
+              color: var(--text-secondary);
+              font-size: 0.9rem;
+            "
+          >
+            Preview Output
+          </p>
+          <audio id="result-audio" controls></audio>
+        </div>
+
+        <a
+          id="download-link"
+          style="text-decoration: none; width: 100%; max-width: 400px"
+        >
+          <button
+            type="button"
+            style="
+              background-color: #238636;
+              box-shadow: 0 0 15px rgba(35, 134, 54, 0.3);
+            "
+          >
+            Download IR .wav File
+          </button>
+        </a>
+      </div>
+    </div>
+
+    <!-- Source Audio Help Modal -->
+    <div class="modal-overlay" id="source-modal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('source-modal')">
+          &times;
+        </button>
+        <h2 style="margin-top: 0">Source Audio Guide</h2>
+
+        <p class="modal-text">
+          The algorithm compares the Pickup signal to this Mic signal and
+          generates an Impulse Response that makes the Pickup sound like the
+          Mic. Record both signals at the same time into the DAW of your choice
+          (Garageband, Audacity, etc.) or a multi-track recorder like a Zoom H5.
+          Ensure both files are max volume without peaking, time-aligned, and
+          from the same performance for best results. Output to 44.1kHz mono wav
+          files. 45-60 seconds is plenty of audio for this process.
+        </p>
+
+        <h4 style="color: var(--accent-color); margin-bottom: 0.5rem">
+          Pickup WAV
+        </h4>
+        <p class="modal-text">
+          This is the sterile, direct audio signal recorded straight from your
+          acoustic guitar's built-in (usually piezo) pickup. This is the
+          baseline sound that the algorithm will learn to "convert".
+        </p>
+
+        <h4
+          style="
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+            margin-top: 1.5rem;
+          "
+        >
+          Mic WAV
+        </h4>
+        <p class="modal-text">
+          This is the target "studio" sound recorded with a real microphone
+          placed in front of your acoustic guitar. A nice dynamic mic like a
+          Shure SM57 is recommended for best results. In my experience,
+          condensers can be too boomy in the mid range and prone to feedback.
+        </p>
+      </div>
+    </div>
+
+    <!-- Configuration Help Modal -->
+    <div class="modal-overlay" id="config-modal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal('config-modal')">
+          &times;
+        </button>
+        <h2 style="margin-top: 0">Configuration Guide</h2>
+
+        <h4 style="color: var(--accent-color); margin-bottom: 0.5rem">
+          IR Length (Samples)
+        </h4>
+        <p class="modal-text">
+          Determines the length of the generated impulse response.
+          <strong>2048</strong> represents roughly 46 milliseconds of audio and
+          is the sweet spot for avoiding unnatural low-end ringing caused by
+          mathematically forcing the IR to match the microphone's Graphic EQ.
+          Increasing length (e.g. 4096) allows for finer detail but can
+          introduce muddy bass artifacts.
+        </p>
+
+        <h4
+          style="
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+            margin-top: 1.5rem;
+          "
+        >
+          Smoothing (Fractional Octave)
+        </h4>
+        <p class="modal-text">
+          Smoothes the microscopic mathematical peaks and valleys in the
+          frequency response before generating the final audio. A setting of
+          <strong>1/3</strong> mathematically averages adjacent frequencies,
+          preventing a spiky "comb filter" effect in the high end, resulting in
+          a more natural, wooden acoustic tone. Lowering this value will leave
+          more of those sharp, resonant microscopic peaks intact (potentially
+          introducing harsh highs), while raising this value will more
+          aggressively average the frequencies, potentially dulling the unique
+          character and definition of the acoustic tone.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      // DOM Elements
+      const piezoInput = document.getElementById("piezo-file");
+      const micInput = document.getElementById("mic-file");
+      const piezoZone = document.getElementById("piezo-zone");
+      const micZone = document.getElementById("mic-zone");
+      const piezoName = document.getElementById("piezo-name");
+      const micName = document.getElementById("mic-name");
+
+      const lenInput = document.getElementById("ir-length");
+      const smoothInput = document.getElementById("smoothing");
+      const lenValue = document.getElementById("len-value");
+      const smoothValue = document.getElementById("smooth-value");
+
+      const generateBtn = document.getElementById("generate-btn");
+      const loader = document.getElementById("loader");
+      const resultPanel = document.getElementById("result-panel");
+      const resultPlot = document.getElementById("result-plot");
+      const resultAudio = document.getElementById("result-audio");
+      const downloadLink = document.getElementById("download-link");
+      const errorMsg = document.getElementById("error-msg");
+
+      // State
+      let piezoFile = null;
+      let micFile = null;
+
+      // UI Updates
+      function checkReady() {
+        if (piezoFile && micFile) {
+          generateBtn.disabled = false;
+        } else {
+          generateBtn.disabled = true;
+        }
+      }
+
+      // Modal Logic
+      function openModal(modalId) {
+        document.getElementById(modalId).classList.add("show");
+      }
+      function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove("show");
+      }
+      window.onclick = function (event) {
+        if (event.target.classList.contains("modal-overlay")) {
+          event.target.classList.remove("show");
+        }
+      };
+
+      // Drag and Drop Logic
+      const setupDropZone = (zone, input, nameSpan, fileVarName) => {
+        ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+          zone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        ["dragenter", "dragover"].forEach((eventName) => {
+          zone.addEventListener(
+            eventName,
+            () => zone.classList.add("dragover"),
+            false,
+          );
+        });
+
+        ["dragleave", "drop"].forEach((eventName) => {
+          zone.addEventListener(
+            eventName,
+            () => zone.classList.remove("dragover"),
+            false,
+          );
+        });
+
+        zone.addEventListener(
+          "drop",
+          (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) {
+              input.files = files;
+              handleFileSet(files[0], zone, nameSpan, fileVarName);
+            }
+          },
+          false,
+        );
+
+        input.addEventListener("change", (e) => {
+          if (e.target.files.length) {
+            handleFileSet(e.target.files[0], zone, nameSpan, fileVarName);
+          }
+        });
+      };
+
+      function handleFileSet(file, zone, nameSpan, fileVarName) {
+        if (fileVarName === "piezo") piezoFile = file;
+        if (fileVarName === "mic") micFile = file;
+
+        nameSpan.innerText = file.name;
+        zone.classList.add("has-file");
+        checkReady();
+      }
+
+      setupDropZone(piezoZone, piezoInput, piezoName, "piezo");
+      setupDropZone(micZone, micInput, micName, "mic");
+
+      // Sliders
+      lenInput.addEventListener("input", (e) => {
+        lenValue.innerText = e.target.value;
+      });
+
+      smoothInput.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if (val === 0) smoothValue.innerText = "0 (Off)";
+        else if (val < 0.2) smoothValue.innerText = "1/6";
+        else if (val < 0.4) smoothValue.innerText = "1/3";
+        else if (val < 0.6) smoothValue.innerText = "1/2";
+        else smoothValue.innerText = "1 Octave";
+      });
+
+      // Generation API Call
+      generateBtn.addEventListener("click", async () => {
+        errorMsg.style.display = "none";
+        resultPanel.style.display = "none";
+        loader.style.display = "block";
+        generateBtn.disabled = true;
+
+        const formData = new FormData();
+        formData.append("piezo_file", piezoFile);
+        formData.append("mic_file", micFile);
+        formData.append("ir_length", lenInput.value);
+        formData.append("smoothing", smoothInput.value);
+
+        try {
+          const response = await fetch("/api/generate", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || "Server error occurred");
+          }
+
+          // Render Base64 Data
+          resultPlot.src = `data:image/png;base64,${data.img_base64}`;
+          const audioUrl = `data:audio/wav;base64,${data.wav_base64}`;
+          resultAudio.src = audioUrl;
+          downloadLink.href = audioUrl;
+          downloadLink.download = "vics_ir_output.wav";
+
+          resultPanel.style.display = "flex";
+        } catch (err) {
+          errorMsg.innerText = err.message;
+          errorMsg.style.display = "block";
+        } finally {
+          loader.style.display = "none";
+          generateBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
