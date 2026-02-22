@@ -51,7 +51,7 @@ def cleanup_temp_dir(dir_path: str):
     except Exception as e:
         print(f"Error cleaning up temp directory {dir_path}: {e}")
 
-def run_ir_generation(task_id: str, temp_dir: str, piezo_path: str, mic_path: str, output_path: str, ir_length: int, smoothing: float):
+def run_ir_generation(task_id: str, temp_dir: str, piezo_path: str, mic_path: str, output_path: str, ir_length: int, smoothing: float, algorithm: str = "standard"):
     """Background worker that runs the compute-heavy generator and updates the tasks dict."""
     try:
         # Define the callback that ties the generator to our task dict
@@ -60,32 +60,62 @@ def run_ir_generation(task_id: str, temp_dir: str, piezo_path: str, mic_path: st
             if pct is not None:
                 tasks[task_id]["progress"] = pct
 
-        generate_guitar_ir(
-            piezo_path=piezo_path,
-            mic_path=mic_path,
-            output_path=output_path,
-            ir_length=ir_length,
-            smoothing=smoothing,
-            plot=True,
-            progress_callback=progress_cb
-        )
-        
-        # Generator finished successfully. Read the files into base64.
-        # Read the output IR (WAV)
-        with open(output_path, "rb") as f:
-            wav_base64 = base64.b64encode(f.read()).decode("utf-8")
+        if algorithm == "cuki":
+            from cuki_ir_core import generate_irs
+            output_dir = Path(temp_dir) / "cuki_out"
+            output_dir.mkdir(exist_ok=True)
             
-        # Read the plot image (PNG)
-        plot_path = output_path.rsplit('.', 1)[0] + '.png'
-        with open(plot_path, "rb") as f:
-            img_base64 = base64.b64encode(f.read()).decode("utf-8")
+            generate_irs(
+                piezo_path=Path(piezo_path),
+                mic_path=Path(mic_path),
+                ir_size=ir_length,
+                output_dir=output_dir,
+                progress_callback=progress_cb
+            )
             
-        # Store results
-        tasks[task_id]["status"] = "completed"
-        tasks[task_id]["result"] = {
-            "wav_base64": wav_base64,
-            "img_base64": img_base64
-        }
+            zip_path = os.path.join(temp_dir, "cuki_irs")
+            shutil.make_archive(zip_path, 'zip', output_dir)
+            zip_file_path = zip_path + ".zip"
+            
+            with open(zip_file_path, "rb") as f:
+                zip_base64 = base64.b64encode(f.read()).decode("utf-8")
+                
+            plot_path = output_dir / "comparison_plot.png"
+            with open(plot_path, "rb") as f:
+                img_base64 = base64.b64encode(f.read()).decode("utf-8")
+                
+            tasks[task_id]["status"] = "completed"
+            tasks[task_id]["result"] = {
+                "zip_base64": zip_base64,
+                "img_base64": img_base64
+            }
+        else:
+            generate_guitar_ir(
+                piezo_path=piezo_path,
+                mic_path=mic_path,
+                output_path=output_path,
+                ir_length=ir_length,
+                smoothing=smoothing,
+                plot=True,
+                progress_callback=progress_cb
+            )
+            
+            # Generator finished successfully. Read the files into base64.
+            # Read the output IR (WAV)
+            with open(output_path, "rb") as f:
+                wav_base64 = base64.b64encode(f.read()).decode("utf-8")
+                
+            # Read the plot image (PNG)
+            plot_path = output_path.rsplit('.', 1)[0] + '.png'
+            with open(plot_path, "rb") as f:
+                img_base64 = base64.b64encode(f.read()).decode("utf-8")
+                
+            # Store results
+            tasks[task_id]["status"] = "completed"
+            tasks[task_id]["result"] = {
+                "wav_base64": wav_base64,
+                "img_base64": img_base64
+            }
     except Exception as e:
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
@@ -100,7 +130,8 @@ async def generate_ir(
     piezo_file: UploadFile = File(...),
     mic_file: UploadFile = File(...),
     ir_length: int = Form(2048),
-    smoothing: float = Form(0.333333333)
+    smoothing: float = Form(0.333333333),
+    algorithm: str = Form("standard")
 ):
     # Enforce Origin restriction for non-CORS direct API calls (e.g. cURL)
     origin = request.headers.get("origin") or request.headers.get("referer")
@@ -161,7 +192,7 @@ async def generate_ir(
         # Schedule the heavy processing to run in the background
         background_tasks.add_task(
             run_ir_generation, 
-            task_id, temp_dir, piezo_path, mic_path, output_path, ir_length, smoothing
+            task_id, temp_dir, piezo_path, mic_path, output_path, ir_length, smoothing, algorithm
         )
         
         # Immediately return the task ID so the frontend can connect to the event stream

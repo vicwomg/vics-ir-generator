@@ -412,6 +412,27 @@
 
         <div class="control-group">
           <label>
+            <span>Algorithm</span>
+          </label>
+          <select
+            id="algorithm-select"
+            style="
+              width: 100%;
+              padding: 0.5rem;
+              border-radius: 8px;
+              background: var(--bg-color);
+              color: var(--text-primary);
+              border: 1px solid var(--border-color);
+              cursor: pointer;
+            "
+          >
+            <option value="standard">Standard (Original)</option>
+            <option value="cuki">Cuki's Algorithm</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>
             <span>IR Length (Samples)</span>
             <span id="len-value">2048</span>
           </label>
@@ -426,7 +447,7 @@
           />
         </div>
 
-        <div class="control-group">
+        <div class="control-group" id="smoothing-group">
           <label>
             <span>Smoothing (Fractional Octave)</span>
             <span id="smooth-value">1/3</span>
@@ -475,7 +496,10 @@
           alt="Frequency Response Plot"
         />
 
-        <div style="width: 100%; max-width: 400px; text-align: center">
+        <div
+          id="preview-container"
+          style="width: 100%; max-width: 400px; text-align: center"
+        >
           <p
             style="
               margin-bottom: 0.5rem;
@@ -559,6 +583,31 @@
         <h2 style="margin-top: 0">Configuration Guide</h2>
 
         <h4 style="color: var(--accent-color); margin-bottom: 0.5rem">
+          Algorithm
+        </h4>
+        <p class="modal-text">
+          <strong>Standard (Original):</strong> The original algorithm that
+          generates a single, polished IR. It uses a chunking method to reject
+          outliers and applies a final Graphic EQ matching process.<br /><br />
+          <strong>Cuki's Algorithm:</strong> An alternative algorithm based on
+          <a
+            style="color: var(--accent-color)"
+            href="https://github.com/kienphanhuy/Cuki-IR-generator-Python"
+            target="_blank"
+            >Cuki's open-source project</a
+          >. It returns a zip file containing multiple IR variations (Standard,
+          M-file, Blended) so you can choose the one that works best for your
+          instrument. The "M" is Cuki's modified approach to the original
+          algorithm and is often preferred for acoustic guitar IRs.
+        </p>
+
+        <h4
+          style="
+            color: var(--accent-color);
+            margin-bottom: 0.5rem;
+            margin-top: 1.5rem;
+          "
+        >
           IR Length (Samples)
         </h4>
         <p class="modal-text">
@@ -606,6 +655,7 @@
       const smoothInput = document.getElementById("smoothing");
       const lenValue = document.getElementById("len-value");
       const smoothValue = document.getElementById("smooth-value");
+      const algorithmSelect = document.getElementById("algorithm-select");
 
       const generateBtn = document.getElementById("generate-btn");
       const loadingContainer = document.getElementById("loading-container");
@@ -746,6 +796,15 @@
       setupDropZone(piezoZone, piezoInput, piezoName, "piezo");
       setupDropZone(micZone, micInput, micName, "mic");
 
+      algorithmSelect.addEventListener("change", (e) => {
+        const smoothingGroup = document.getElementById("smoothing-group");
+        if (e.target.value === "cuki") {
+          smoothingGroup.style.display = "none";
+        } else {
+          smoothingGroup.style.display = "block";
+        }
+      });
+
       // Sliders
       lenInput.addEventListener("input", (e) => {
         lenValue.innerText = e.target.value;
@@ -775,6 +834,7 @@
         formData.append("mic_file", micFile);
         formData.append("ir_length", lenInput.value);
         formData.append("smoothing", smoothInput.value);
+        formData.append("algorithm", algorithmSelect.value);
 
         const basePath = window.location.pathname.endsWith("/")
           ? window.location.pathname
@@ -812,10 +872,25 @@
             } else if (taskState.status === "completed") {
               // Render Base64 Data
               resultPlot.src = `data:image/png;base64,${taskState.result.img_base64}`;
-              const audioUrl = `data:audio/wav;base64,${taskState.result.wav_base64}`;
-              resultAudio.src = audioUrl;
-              downloadLink.href = audioUrl;
-              downloadLink.download = "vics_ir_output.wav";
+
+              if (taskState.result.zip_base64) {
+                document.getElementById("preview-container").style.display =
+                  "none";
+                const zipUrl = `data:application/zip;base64,${taskState.result.zip_base64}`;
+                downloadLink.href = zipUrl;
+                downloadLink.download = "cuki_irs.zip";
+                downloadLink.querySelector("button").innerText =
+                  "Download Cuki IRs (.zip)";
+              } else {
+                document.getElementById("preview-container").style.display =
+                  "block";
+                const audioUrl = `data:audio/wav;base64,${taskState.result.wav_base64}`;
+                resultAudio.src = audioUrl;
+                downloadLink.href = audioUrl;
+                downloadLink.download = "vics_ir_output.wav";
+                downloadLink.querySelector("button").innerText =
+                  "Download IR .wav File";
+              }
 
               resultPanel.style.display = "flex";
               loadingContainer.style.display = "none";
