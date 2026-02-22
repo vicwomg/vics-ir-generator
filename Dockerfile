@@ -20,7 +20,7 @@ RUN uv venv && \
     uv pip install --system --no-cache -r pyproject.toml
 
 # Copy application code
-COPY api.py vics_ir_generator.py ./
+COPY api.py vics_ir_generator.py cuki_ir_core.py ./
 COPY static/ ./static/
 
 # Expose the API port
