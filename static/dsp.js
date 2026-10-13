@@ -360,8 +360,8 @@ export function generateCukiIrs(piezo, mic, sampleRate, irLength = 2048, progres
 export function generateComparisonSpectrum(piezo, mic, ir, sampleRate, progress = () => {}) {
   progress("Applying IR for comparison plot…", 93);
   const comparisonLength = Math.min(piezo.length, mic.length);
-  const segmentLength = Math.min(8192, comparisonLength);
-  assert(isPowerOfTwo(segmentLength), "Comparison FFT length must be a power of two.");
+  assert(comparisonLength >= 2, "Comparison requires at least 2 aligned audio samples.");
+  const segmentLength = 2 ** Math.floor(Math.log2(Math.min(8192, comparisonLength)));
   const processedPickup = convolveFull(piezo, ir).subarray(0, comparisonLength);
   const targetMic = mic.subarray(0, comparisonLength);
   progress("Generating comparison plot…", 96);

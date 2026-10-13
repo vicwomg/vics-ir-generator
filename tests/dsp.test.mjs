@@ -47,6 +47,19 @@ test("comparison plot shows identical spectra for an identity IR", () => {
   for (let i = 0; i < plot.targetDb.length; i++) assert.ok(Math.abs(plot.targetDb[i] - plot.resultDb[i]) < 1e-8);
 });
 
+test("comparison plot supports non-power-of-two shared extents", () => {
+  const sampleRate = 4000;
+  const samples = Float64Array.from({ length: 8000 }, (_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate));
+  const plot = generateComparisonSpectrum(samples, samples, new Float64Array([1]), sampleRate);
+  assert.equal(plot.frequencies.length, 2049);
+  for (let i = 0; i < plot.targetDb.length; i++) assert.ok(Math.abs(plot.targetDb[i] - plot.resultDb[i]) < 1e-8);
+});
+
+test("comparison plot rejects inputs too short for Welch analysis", () => {
+  const samples = new Float64Array([1]);
+  assert.throws(() => generateComparisonSpectrum(samples, samples, new Float64Array([1]), 4000), /at least 2 aligned audio samples/);
+});
+
 test("comparison plot uses the shared extent of unequal input lengths", () => {
   const sampleRate = 44100;
   const pickup = Float64Array.from({ length: 16384 }, (_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate));
