@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStoredZip, decodeWav, encodePcmWav, fftInPlace, generateComparisonSpectrum } from "../static/dsp.js";
+import { createStoredZip, decodeWav, encodePcmWav, fftInPlace, generateComparisonSpectrum, generateStandardIr } from "../static/dsp.js";
 
 test("16-bit WAV encoding round-trips mono samples and metadata", () => {
   const input = new Float64Array([-1, -0.5, 0, 0.5, 0.9999]);
@@ -15,6 +15,11 @@ test("24-bit WAV encoding round-trips mono samples", () => {
   const input = new Float64Array([-0.9, -0.1, 0.1, 0.9]);
   const decoded = decodeWav(encodePcmWav(input, 48000, 24));
   for (let i = 0; i < input.length; i++) assert.ok(Math.abs(decoded.samples[i] - input[i]) <= 1 / 8388608);
+});
+
+test("WAV encoding rejects non-finite samples", () => {
+  assert.throws(() => encodePcmWav(new Float64Array([0, Number.NaN]), 44100), /non-finite samples/);
+  assert.throws(() => encodePcmWav(new Float64Array([Number.POSITIVE_INFINITY]), 44100, 24), /non-finite samples/);
 });
 
 test("FFT inverse reconstructs its input", () => {
@@ -55,4 +60,23 @@ test("comparison plot analyzes the convolved pickup instead of multiplying spect
   }
   const plot = generateComparisonSpectrum(pickup, expected, ir, sampleRate);
   for (let i = 0; i < plot.targetDb.length; i++) assert.ok(Math.abs(plot.targetDb[i] - plot.resultDb[i]) < 1e-8);
+});
+
+test("standard generation uses the shared extent of mismatched input lengths", () => {
+  const sampleRate = 2048;
+  const pickup = Float64Array.from({ length: sampleRate * 2 }, (_, i) => (
+    Math.sin((2 * Math.PI * 110 * i) / sampleRate) + 0.25 * Math.sin((2 * Math.PI * 370 * i) / sampleRate)
+  ));
+  const mic = Float64Array.from({ length: sampleRate * 6 }, (_, i) => (
+    Math.sin((2 * Math.PI * 110 * i) / sampleRate) + 0.25 * Math.sin((2 * Math.PI * 370 * i) / sampleRate)
+  ));
+  const ir = generateStandardIr(pickup, mic, sampleRate, 64, 0);
+  assert.equal(ir.length, 64);
+  assert.ok(ir.every(Number.isFinite));
+  assert.ok(ir.some((sample) => sample !== 0));
+});
+
+test("standard generation rejects an unavailable EQ interval", () => {
+  const samples = new Float64Array([1]);
+  assert.throws(() => generateStandardIr(samples, samples, 0, 64, 0), /usable EQ matching interval/);
 });

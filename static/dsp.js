@@ -68,6 +68,7 @@ function readInt24(view, offset) {
 
 export function encodePcmWav(samples, sampleRate, bits = 16) {
   assert(bits === 16 || bits === 24, "Output must be 16-bit or 24-bit PCM.");
+  for (let i = 0; i < samples.length; i++) assert(Number.isFinite(samples[i]), "Cannot encode WAV with non-finite samples.");
   const bytesPerSample = bits / 8;
   const dataLength = samples.length * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataLength);
@@ -181,6 +182,9 @@ export function generateStandardIr(piezo, mic, sampleRate, irLength = 2048, smoo
   assert(piezo.length >= sampleRate * 2 && mic.length >= sampleRate * 2, "Audio files are too short. At least 2 seconds are required.");
   assert(isPowerOfTwo(irLength), "IR length must be a power of two.");
   const frameCount = Math.min(piezo.length, mic.length);
+  const testStart = Math.min(10 * sampleRate, Math.trunc(frameCount / 3));
+  const testEnd = Math.min(20 * sampleRate, Math.trunc(frameCount / 3) * 2);
+  assert(testEnd > testStart, "The audio files do not share a usable EQ matching interval.");
   const chunkCount = Math.floor(frameCount / sampleRate) - 1;
   const transfers = Array.from({ length: chunkCount }, () => ({ re: new Float64Array(irLength), im: new Float64Array(irLength) }));
 
@@ -257,8 +261,6 @@ export function generateStandardIr(piezo, mic, sampleRate, irLength = 2048, smoo
   normalizeInPlace(ir, 0.95);
 
   progress("Measuring one-third-octave response…", 60);
-  const testStart = Math.min(10 * sampleRate, Math.trunc(mic.length / 3));
-  const testEnd = Math.min(20 * sampleRate, Math.trunc(mic.length / 3) * 2);
   const micSection = mic.slice(testStart, testEnd);
   const piezoSection = piezo.slice(testStart, testEnd);
   const simulated = convolveSame(piezoSection, ir);
