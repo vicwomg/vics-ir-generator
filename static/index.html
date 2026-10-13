@@ -132,6 +132,15 @@
         accent-color: var(--accent-color);
       }
 
+      .control-group select {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--bg-color);
+        color: var(--text-primary);
+      }
+
       button {
         background-color: var(--accent-color);
         color: #0d1117;
@@ -436,15 +445,12 @@
             <span>IR Length (Samples)</span>
             <span id="len-value">2048</span>
           </label>
-          <!-- common 2^n steps: 512, 1024, 2048, 4096 -->
-          <input
-            type="range"
-            id="ir-length"
-            min="512"
-            max="4096"
-            step="512"
-            value="2048"
-          />
+          <select id="ir-length">
+            <option value="512">512</option>
+            <option value="1024">1024</option>
+            <option value="2048" selected>2048</option>
+            <option value="4096">4096</option>
+          </select>
         </div>
 
         <div class="control-group" id="smoothing-group">
@@ -490,11 +496,13 @@
       <div class="panel full-width result-panel" id="result-panel">
         <h2 style="margin: 0">Generation Complete</h2>
 
-        <img
+        <canvas
           class="result-image"
           id="result-plot"
-          alt="Frequency Response Plot"
-        />
+          width="1200"
+          height="600"
+          aria-label="Target microphone and processed pickup frequency response comparison"
+        ></canvas>
 
         <div
           id="preview-container"
@@ -642,7 +650,7 @@
       </div>
     </div>
 
-    <script>
+    <script type="module">
       // DOM Elements
       const piezoInput = document.getElementById("piezo-file");
       const micInput = document.getElementById("mic-file");
@@ -686,6 +694,8 @@
       function closeModal(modalId) {
         document.getElementById(modalId).classList.remove("show");
       }
+      window.openModal = openModal;
+      window.closeModal = closeModal;
       window.onclick = function (event) {
         if (event.target.classList.contains("modal-overlay")) {
           event.target.classList.remove("show");
@@ -819,7 +829,97 @@
         else smoothValue.innerText = "1 Octave";
       });
 
-      // Generation API Call
+      let resultUrl = null;
+      let previewUrl = null;
+
+      function clearResultUrls() {
+        if (resultUrl) URL.revokeObjectURL(resultUrl);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        resultUrl = null;
+        previewUrl = null;
+      }
+
+      function drawComparisonPlot(plot) {
+        const canvas = resultPlot;
+        const context = canvas.getContext("2d");
+        const frequencies = plot.frequencies;
+        const targetDb = plot.targetDb;
+        const resultDb = plot.resultDb;
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.strokeStyle = "#d0d7de";
+        context.lineWidth = 1;
+        const left = 80;
+        const right = canvas.width - 35;
+        const top = 45;
+        const bottom = canvas.height - 65;
+        const targetMin = Math.min(...targetDb);
+        const resultMin = Math.min(...resultDb);
+        const minDb = Math.floor(Math.max(targetMin, resultMin) / 10) * 10;
+        const maxDb = Math.ceil((Math.max(Math.max(...targetDb), Math.max(...resultDb)) + 10) / 10) * 10;
+        const xForFrequency = (frequency) => left + ((Math.log10(frequency) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20))) * (right - left);
+        const yForDb = (db) => bottom - ((db - minDb) / (maxDb - minDb)) * (bottom - top);
+
+        context.font = "22px system-ui, sans-serif";
+        context.fillStyle = "#24292f";
+        context.textAlign = "center";
+        context.fillText("Frequency Response Comparison", canvas.width / 2, 30);
+        context.font = "16px system-ui, sans-serif";
+        for (const frequency of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
+          const x = xForFrequency(frequency);
+          context.beginPath();
+          context.moveTo(x, top);
+          context.lineTo(x, bottom);
+          context.stroke();
+          context.fillText(frequency >= 1000 ? `${frequency / 1000}k` : String(frequency), x, bottom + 25);
+        }
+        context.textAlign = "right";
+        const dbStep = maxDb - minDb > 100 ? 20 : 10;
+        for (let db = minDb; db <= maxDb; db += dbStep) {
+          const y = yForDb(db);
+          context.beginPath();
+          context.moveTo(left, y);
+          context.lineTo(right, y);
+          context.stroke();
+          context.fillText(`${db} dB`, left - 10, y + 5);
+        }
+
+        const drawLine = (values, color) => {
+          context.strokeStyle = color;
+          context.lineWidth = 3;
+          context.beginPath();
+          let started = false;
+          for (let bin = 1; bin < frequencies.length; bin++) {
+            const frequency = frequencies[bin];
+            if (frequency < 20 || frequency > 20000) continue;
+            const x = xForFrequency(frequency);
+            const y = yForDb(values[bin]);
+            if (!started) { context.moveTo(x, y); started = true; }
+            else context.lineTo(x, y);
+          }
+          context.stroke();
+        };
+        drawLine(targetDb, "#3232ff");
+        drawLine(resultDb, "#ffab1f");
+
+        context.font = "17px system-ui, sans-serif";
+        context.textAlign = "left";
+        const legendX = right - 220;
+        const legendY = top + 22;
+        for (const [label, color, row] of [["Target (Mic)", "#3232ff", 0], ["Result (Pickup + IR)", "#ffab1f", 1]]) {
+          const y = legendY + row * 28;
+          context.strokeStyle = color;
+          context.lineWidth = 4;
+          context.beginPath();
+          context.moveTo(legendX, y - 5);
+          context.lineTo(legendX + 42, y - 5);
+          context.stroke();
+          context.fillStyle = "#24292f";
+          context.fillText(label, legendX + 52, y);
+        }
+      }
+
+      // All audio remains in the browser. The worker keeps DSP off the UI thread.
       generateBtn.addEventListener("click", async () => {
         errorMsg.style.display = "none";
         resultPanel.style.display = "none";
@@ -829,86 +929,51 @@
         progressText.innerText = "Initializing...";
         generateBtn.disabled = true;
 
-        const formData = new FormData();
-        formData.append("piezo_file", piezoFile);
-        formData.append("mic_file", micFile);
-        formData.append("ir_length", lenInput.value);
-        formData.append("smoothing", smoothInput.value);
-        formData.append("algorithm", algorithmSelect.value);
-
-        const basePath = window.location.pathname.endsWith("/")
-          ? window.location.pathname
-          : window.location.pathname + "/";
-
         try {
-          // 1. Start the job and get a task ID
-          const response = await fetch(`${basePath}api/generate`, {
-            method: "POST",
-            body: formData,
-          });
-
-          const data = await response.json();
-
-          if (!response.ok || !data.success) {
-            throw new Error(data.error || "Server error occurred");
-          }
-
-          const taskId = data.task_id;
-
-          // 2. Connect to the SSE stream to listen for progress
-          const eventSource = new EventSource(
-            `${basePath}api/status/${taskId}`,
-          );
-
-          eventSource.onmessage = (event) => {
-            const taskState = JSON.parse(event.data);
-
-            if (taskState.status === "failed") {
-              errorMsg.innerText = taskState.error || "Generation failed.";
+          const [piezoBuffer, micBuffer] = await Promise.all([piezoFile.arrayBuffer(), micFile.arrayBuffer()]);
+          const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+          worker.onmessage = ({ data }) => {
+            if (data.type === "progress") {
+              progressText.innerText = data.message || "Generating…";
+              return;
+            }
+            worker.terminate();
+            if (data.type === "error") {
+              errorMsg.innerText = data.message || "Generation failed.";
               errorMsg.style.display = "block";
               loadingContainer.style.display = "none";
               generateBtn.disabled = false;
-              eventSource.close();
-            } else if (taskState.status === "completed") {
-              // Render Base64 Data
-              resultPlot.src = `data:image/png;base64,${taskState.result.img_base64}`;
-
-              if (taskState.result.zip_base64) {
-                document.getElementById("preview-container").style.display =
-                  "none";
-                const zipUrl = `data:application/zip;base64,${taskState.result.zip_base64}`;
-                downloadLink.href = zipUrl;
-                downloadLink.download = "cuki_irs.zip";
-                downloadLink.querySelector("button").innerText =
-                  "Download Cuki IRs (.zip)";
-              } else {
-                document.getElementById("preview-container").style.display =
-                  "block";
-                const audioUrl = `data:audio/wav;base64,${taskState.result.wav_base64}`;
-                resultAudio.src = audioUrl;
-                downloadLink.href = audioUrl;
-                downloadLink.download = "vics_ir_output.wav";
-                downloadLink.querySelector("button").innerText =
-                  "Download IR .wav File";
-              }
-
-              resultPanel.style.display = "flex";
-              loadingContainer.style.display = "none";
-              generateBtn.disabled = false;
-              eventSource.close();
-            } else {
-              // Only update the message text if we are still running
-              progressText.innerText = taskState.message || "Generating...";
+              return;
             }
-          };
 
-          eventSource.onerror = (err) => {
-            errorMsg.innerText = "Lost connection to server progress stream.";
+            clearResultUrls();
+            drawComparisonPlot(data.plot);
+            const isCuki = data.algorithm === "cuki";
+            resultUrl = URL.createObjectURL(new Blob([data.download], { type: isCuki ? "application/zip" : "audio/wav" }));
+            const previewWav = isCuki ? data.previewWav : data.download;
+            previewUrl = URL.createObjectURL(new Blob([previewWav], { type: "audio/wav" }));
+            resultAudio.src = previewUrl;
+            downloadLink.href = resultUrl;
+            downloadLink.download = isCuki ? "cuki_irs.zip" : "vics_ir_output.wav";
+            downloadLink.querySelector("button").innerText = isCuki ? "Download Cuki IRs (.zip)" : "Download IR .wav File";
+            resultPanel.style.display = "flex";
+            loadingContainer.style.display = "none";
+            generateBtn.disabled = false;
+          };
+          worker.onerror = (event) => {
+            worker.terminate();
+            errorMsg.innerText = event.message || "The audio worker failed.";
             errorMsg.style.display = "block";
             loadingContainer.style.display = "none";
             generateBtn.disabled = false;
-            eventSource.close();
           };
+          worker.postMessage({
+            piezo: piezoBuffer,
+            mic: micBuffer,
+            irLength: Number(lenInput.value),
+            smoothing: Number(smoothInput.value),
+            algorithm: algorithmSelect.value,
+          }, [piezoBuffer, micBuffer]);
         } catch (err) {
           errorMsg.innerText = err.message;
           errorMsg.style.display = "block";
