@@ -186,6 +186,7 @@ export function generateStandardIr(piezo, mic, sampleRate, irLength = 2048, smoo
   const testEnd = Math.min(20 * sampleRate, Math.trunc(frameCount / 3) * 2);
   assert(testEnd > testStart, "The audio files do not share a usable EQ matching interval.");
   const chunkCount = Math.floor(frameCount / sampleRate) - 1;
+  const chunkLength = Math.min(irLength, sampleRate - 1);
   const transfers = Array.from({ length: chunkCount }, () => ({ re: new Float64Array(irLength), im: new Float64Array(irLength) }));
 
   progress("Extracting transfer functions…", 10);
@@ -193,8 +194,8 @@ export function generateStandardIr(piezo, mic, sampleRate, irLength = 2048, smoo
     const start = sampleRate + chunk * sampleRate;
     const pRe = new Float64Array(irLength);
     const mRe = new Float64Array(irLength);
-    pRe.set(piezo.subarray(start, Math.min(start + irLength, piezo.length)));
-    mRe.set(mic.subarray(start, Math.min(start + irLength, mic.length)));
+    pRe.set(piezo.subarray(start, start + chunkLength));
+    mRe.set(mic.subarray(start, start + chunkLength));
     const pIm = new Float64Array(irLength);
     const mIm = new Float64Array(irLength);
     fftInPlace(pRe, pIm, false);
@@ -288,14 +289,15 @@ export function generateCukiIrs(piezo, mic, sampleRate, irLength = 2048, progres
   const frameCount = Math.min(piezo.length, mic.length);
   const chunkCount = Math.floor(frameCount / sampleRate) - 10;
   assert(chunkCount > 0, "Cuki's algorithm requires at least 11 seconds of audio.");
+  const chunkLength = Math.min(irLength, sampleRate - 1);
   const transfers = Array.from({ length: chunkCount }, () => ({ re: new Float64Array(irLength), im: new Float64Array(irLength) }));
 
   for (let chunk = 0; chunk < chunkCount; chunk++) {
     const start = 3 * sampleRate + chunk * sampleRate;
     const pRe = new Float64Array(irLength);
     const mRe = new Float64Array(irLength);
-    pRe.set(piezo.subarray(start, Math.min(start + irLength, piezo.length)));
-    mRe.set(mic.subarray(start, Math.min(start + irLength, mic.length)));
+    pRe.set(piezo.subarray(start, start + chunkLength));
+    mRe.set(mic.subarray(start, start + chunkLength));
     const pIm = new Float64Array(irLength);
     const mIm = new Float64Array(irLength);
     fftInPlace(pRe, pIm, false);
@@ -362,7 +364,7 @@ export function generateComparisonSpectrum(piezo, mic, ir, sampleRate, progress 
   const comparisonLength = Math.min(piezo.length, mic.length);
   assert(comparisonLength >= 2, "Comparison requires at least 2 aligned audio samples.");
   const segmentLength = 2 ** Math.floor(Math.log2(Math.min(8192, comparisonLength)));
-  const processedPickup = convolveFull(piezo, ir).subarray(0, comparisonLength);
+  const processedPickup = convolveFull(piezo.subarray(0, comparisonLength), ir).subarray(0, comparisonLength);
   const targetMic = mic.subarray(0, comparisonLength);
   progress("Generating comparison plot…", 96);
   const targetPower = welchPower(targetMic, sampleRate, segmentLength);

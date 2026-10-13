@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStoredZip, decodeWav, encodePcmWav, fftInPlace, generateComparisonSpectrum, generateStandardIr } from "../static/dsp.js";
+import { createStoredZip, decodeWav, encodePcmWav, fftInPlace, generateComparisonSpectrum, generateCukiIrs, generateStandardIr } from "../static/dsp.js";
 
 test("16-bit WAV encoding round-trips mono samples and metadata", () => {
   const input = new Float64Array([-1, -0.5, 0, 0.5, 0.9999]);
@@ -102,4 +102,36 @@ test("standard generation uses the shared extent of mismatched input lengths", (
 test("standard generation rejects an unavailable EQ interval", () => {
   const samples = new Float64Array([1]);
   assert.throws(() => generateStandardIr(samples, samples, 0, 64, 0), /usable EQ matching interval/);
+});
+
+test("standard low-rate chunks match the Python frame boundary", () => {
+  const sampleRate = 4000;
+  const irLength = 4096;
+  const pickup = Float64Array.from({ length: sampleRate * 12 }, (_, i) => (
+    Math.sin((2 * Math.PI * 83 * i) / sampleRate) + 0.3 * Math.sin((2 * Math.PI * 337 * i) / sampleRate)
+  ));
+  const mic = Float64Array.from(pickup, (sample) => sample * 0.7);
+  const changedBoundaryMic = mic.slice();
+  for (const second of [2, 3, 4, 9, 10, 11, 12]) changedBoundaryMic[second * sampleRate - 1] += 8;
+  const reference = generateStandardIr(pickup, mic, sampleRate, irLength, 0);
+  const actual = generateStandardIr(pickup, changedBoundaryMic, sampleRate, irLength, 0);
+  assert.ok(reference.every(Number.isFinite));
+  assert.deepEqual(actual, reference);
+});
+
+test("Cuki low-rate chunks match the Python frame boundary", () => {
+  const sampleRate = 4000;
+  const irLength = 4096;
+  const pickup = Float64Array.from({ length: sampleRate * 20 }, (_, i) => (
+    Math.sin((2 * Math.PI * 83 * i) / sampleRate) + 0.3 * Math.sin((2 * Math.PI * 337 * i) / sampleRate)
+  ));
+  const mic = Float64Array.from(pickup, (sample) => sample * 0.7);
+  const changedBoundaryMic = mic.slice();
+  for (const second of [4, 5, 6, 7, 8, 9, 10]) changedBoundaryMic[second * sampleRate - 1] += 8;
+  const reference = generateCukiIrs(pickup, mic, sampleRate, irLength);
+  const actual = generateCukiIrs(pickup, changedBoundaryMic, sampleRate, irLength);
+  for (const variant of ["matched", "standard", "blended"]) {
+    assert.ok(reference[variant].every(Number.isFinite));
+    assert.deepEqual(actual[variant], reference[variant]);
+  }
 });
