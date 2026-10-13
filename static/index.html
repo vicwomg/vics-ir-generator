@@ -197,7 +197,7 @@
         max-width: 800px;
         border-radius: 8px;
         border: 1px solid var(--border-color);
-        background: #fff; /* matplotlib background usually white */
+        background: #fff;
       }
 
       audio {
@@ -357,7 +357,7 @@
       <p>
         I created this tool because I couldn't find a simple way to create
         Acoustic guitar IR profiles. If you find this useful, please consider
-        supporting my work and helping offset my hosting/CPU costs:
+        supporting its ongoing development:
         <a style="color: white" href="https://buymeacoffee.com/vicwomg"
           >Buy me a coffee</a
         >. Github source:
@@ -755,7 +755,7 @@
           file.type !== "audio/wav" &&
           file.type !== "audio/x-wav"
         ) {
-          errorMsg.innerText = `File "${file.name}" is not a valid WAV file. Please upload a .wav file.`;
+          errorMsg.innerText = `File "${file.name}" is not a valid WAV file. Please select a .wav file.`;
           errorMsg.style.display = "block";
 
           if (fileVarName === "piezo") {
@@ -775,7 +775,7 @@
 
         const maxSize = 15 * 1024 * 1024; // 15MB
         if (file.size > maxSize) {
-          errorMsg.innerText = `File "${file.name}" is too large. Please limit uploads to 15MB.`;
+          errorMsg.innerText = `File "${file.name}" is too large. Please limit files to 15MB.`;
           errorMsg.style.display = "block";
 
           if (fileVarName === "piezo") {
