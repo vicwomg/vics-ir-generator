@@ -55,7 +55,7 @@ All DSP runs locally in a Web Worker. The selected recordings never leave the br
 
 The browser port follows the same operations as NumPy, SciPy, and libsndfile. Floating-point FFT implementations are not bit-stable across runtimes, so exact file hashes are not promised. On the provided SM57 sample pair at the default 2048-sample setting, the Standard output differs from the Python reference at 4 samples by one 16-bit least-significant bit. Each differing Cuki sample is likewise within one 24-bit least-significant bit.
 
-There is a free-tier hosted version at: https://vics-ir-generator.onrender.com/ (it will probably take a long time to load and no guarantees on uptime or performance)
+There is a hosted version at: https://vics-ir.onrender.com/
 
 ### Running via Docker
 
@@ -84,6 +84,15 @@ python3 -m http.server 8000 --directory static
 Then open [http://127.0.0.1:8000](http://127.0.0.1:8000). Any static host (GitHub Pages, Cloudflare Pages, Netlify, S3, and similar) can deploy the contents of `static/` directly.
 
 The FastAPI files remain in the repository as a Python reference implementation and for compatibility with existing deployments, but the current web page does not call the API.
+
+### Redirecting a legacy Render service
+
+An existing Render Web Service can redirect its old URL to the static site without installing the DSP dependencies. Configure the legacy service with:
+
+- Build Command: `true`
+- Start Command: `python3 redirect_server.py`
+
+`redirect_server.py` listens on Render's `PORT` and redirects every path and query string to `https://vics-ir.onrender.com/`. Set `REDIRECT_TARGET` to override that destination.
 
 ### JavaScript DSP tests
 
