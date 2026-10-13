@@ -359,11 +359,13 @@ export function generateCukiIrs(piezo, mic, sampleRate, irLength = 2048, progres
 
 export function generateComparisonSpectrum(piezo, mic, ir, sampleRate, progress = () => {}) {
   progress("Applying IR for comparison plot…", 93);
-  const segmentLength = Math.min(8192, mic.length);
+  const comparisonLength = Math.min(piezo.length, mic.length);
+  const segmentLength = Math.min(8192, comparisonLength);
   assert(isPowerOfTwo(segmentLength), "Comparison FFT length must be a power of two.");
-  const processedPickup = convolveFull(piezo, ir);
+  const processedPickup = convolveFull(piezo, ir).subarray(0, comparisonLength);
+  const targetMic = mic.subarray(0, comparisonLength);
   progress("Generating comparison plot…", 96);
-  const targetPower = welchPower(mic, sampleRate, segmentLength);
+  const targetPower = welchPower(targetMic, sampleRate, segmentLength);
   const resultPower = welchPower(processedPickup, sampleRate, segmentLength);
 
   const frequencies = new Float64Array(targetPower.length);

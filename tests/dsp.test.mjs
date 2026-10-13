@@ -47,6 +47,16 @@ test("comparison plot shows identical spectra for an identity IR", () => {
   for (let i = 0; i < plot.targetDb.length; i++) assert.ok(Math.abs(plot.targetDb[i] - plot.resultDb[i]) < 1e-8);
 });
 
+test("comparison plot uses the shared extent of unequal input lengths", () => {
+  const sampleRate = 44100;
+  const pickup = Float64Array.from({ length: 16384 }, (_, i) => Math.sin((2 * Math.PI * 440 * i) / sampleRate));
+  const mic = Float64Array.from({ length: 32768 }, (_, i) => (
+    i < pickup.length ? pickup[i] : Math.sin((2 * Math.PI * 1200 * i) / sampleRate)
+  ));
+  const plot = generateComparisonSpectrum(pickup, mic, new Float64Array([1]), sampleRate);
+  for (let i = 0; i < plot.targetDb.length; i++) assert.ok(Math.abs(plot.targetDb[i] - plot.resultDb[i]) < 1e-8);
+});
+
 test("comparison plot analyzes the convolved pickup instead of multiplying spectra", () => {
   const sampleRate = 44100;
   const pickup = Float64Array.from({ length: 16384 }, (_, i) => (
